@@ -1,9 +1,11 @@
-const axios = require('axios');
-const ical = require('ical');
-const cron = require('node-cron');
+import axios from 'axios';
+import ical from 'ical';
+import cron from 'node-cron';
+import { DateTime } from 'luxon';
 
-const CALENDAR_URL = 'https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics';
+const CALENDAR_URL = process.env.CALENDAR_URL || 'https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+const TIMEZONE = process.env.TIMEZONE || 'America/New_York';
 
 if (!DISCORD_WEBHOOK_URL) {
   console.error('Please set the DISCORD_WEBHOOK_URL environment variable.');
@@ -23,13 +25,15 @@ async function fetchHolidays() {
 }
 
 function getUpcomingHoliday(events) {
-  const now = new Date();
+  const now = DateTime.now().setZone(TIMEZONE);
   let upcomingHoliday = null;
 
   for (const event of Object.values(events)) {
-    if (event.type === 'VEVENT' && event.start > now) {
-      if (!upcomingHoliday || event.start < upcomingHoliday.start) {
+    const eventStart = DateTime.fromISO(event.start.toISOString(), { zone: TIMEZONE });
+    if (event.type === 'VEVENT' && eventStart > now) {
+      if (!upcomingHoliday || eventStart < DateTime.fromISO(upcomingHoliday.start.toISOString(), { zone: TIMEZONE })) {
         upcomingHoliday = event;
+        upcomingHoliday.start = eventStart.toJSDate(); // Ensure the date is updated to the timezone
       }
     }
   }
@@ -39,7 +43,7 @@ function getUpcomingHoliday(events) {
 
 async function sendDiscordNotification(holiday) {
   const message = {
-    content: `🎉 Upcoming Holiday: **${holiday.summary}** on <t:${Math.floor(holiday.start.getTime() / 1000)}:D>`,
+    content: `🎉 Upcoming Holiday: **${holiday.summary}** on <t:${Math.floor(DateTime.fromJSDate(holiday.start).setZone(TIMEZONE).toSeconds())}:D>`,
   };
 
   try {
@@ -52,11 +56,12 @@ async function sendDiscordNotification(holiday) {
 }
 
 async function checkAndNotify() {
+  const now = DateTime.now().setZone(TIMEZONE);
   const holidays = await fetchHolidays();
   const upcomingHoliday = getUpcomingHoliday(holidays);
 
   if (upcomingHoliday && upcomingHoliday.uid !== lastNotifiedHoliday) {
-    const daysUntilHoliday = Math.ceil((upcomingHoliday.start - new Date()) / (1000 * 60 * 60 * 24));
+    const daysUntilHoliday = Math.ceil((DateTime.fromJSDate(upcomingHoliday.start).setZone(TIMEZONE).diff(now, 'days').days));
 
     if (daysUntilHoliday <= 7) {
       await sendDiscordNotification(upcomingHoliday);
@@ -64,8 +69,12 @@ async function checkAndNotify() {
   }
 }
 
-// Run the check daily at 9:00 AM
-cron.schedule('0 9 * * *', checkAndNotify);
+// Run the check daily at 9:00 AM in the specified timezone
+cron.schedule('0 9 * * *', () => {
+  checkAndNotify();
+}, {
+  timezone: TIMEZONE
+});
 
 console.log('Holiday Discord Notifier is running. Press Ctrl+C to exit.');
 
