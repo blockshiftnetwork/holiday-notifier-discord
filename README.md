@@ -53,6 +53,7 @@ The notifier checks for upcoming holidays daily at 9:00 AM and sends a notificat
 - `axios`: To perform HTTP requests.
 - `ical`: To parse the .ics calendar data.
 - `node-cron`: To schedule periodic checks.
+- `luxon`: To handle timezones.
 
 ## Note
 

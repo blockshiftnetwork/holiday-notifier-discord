@@ -29,11 +29,14 @@ function getUpcomingHoliday(events) {
   let upcomingHoliday = null;
 
   for (const event of Object.values(events)) {
-    const eventStart = DateTime.fromISO(event.start.toISOString(), { zone: TIMEZONE });
-    if (event.type === 'VEVENT' && eventStart > now) {
-      if (!upcomingHoliday || eventStart < DateTime.fromISO(upcomingHoliday.start.toISOString(), { zone: TIMEZONE })) {
-        upcomingHoliday = event;
-        upcomingHoliday.start = eventStart.toJSDate(); // Ensure the date is updated to the timezone
+    if (event.type === 'VEVENT') {
+      const eventStartUTC = DateTime.fromISO(event.start.toISOString(), { zone: 'utc' });
+      const eventStart = eventStartUTC.setZone(TIMEZONE);
+      
+      if (eventStart > now) {
+        if (!upcomingHoliday || eventStart < DateTime.fromISO(upcomingHoliday.start.toISOString(), { zone: 'utc' }).setZone(TIMEZONE)) {
+          upcomingHoliday = { ...event, start: eventStart.toJSDate() };
+        }
       }
     }
   }
@@ -69,7 +72,6 @@ async function checkAndNotify() {
   }
 }
 
-// Run the check daily at 9:00 AM in the specified timezone
 cron.schedule('0 9 * * *', () => {
   checkAndNotify();
 }, {
