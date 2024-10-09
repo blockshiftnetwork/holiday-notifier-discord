@@ -1,0 +1,12 @@
+{
+    "name": "holiday-discord-notifier",
+    "private": true,
+    "scripts": {
+      "start": "node index.js"
+    },
+    "dependencies": {
+      "axios": "^0.27.2",
+      "ical": "^0.8.0",
+      "node-cron": "^3.0.2"
+    }
+  }
